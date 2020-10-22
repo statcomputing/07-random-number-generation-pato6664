@@ -15,6 +15,8 @@ knitr::opts_chunk$set(echo = TRUE,message = F)
 
 # Problem 5.3.1 
 
+No idea if any of this is right. 
+
 ## Part (i)
 
 ## Part (ii) 
@@ -40,110 +42,177 @@ knitr::opts_chunk$set(echo = TRUE,message = F)
 
 ### Implementation
 
-```{r}
+
+```{r,gamma_mix_sim}
 rm(list=ls())
-library(tidyverse)
 
-gamma_mix <- function(n,theta){
+
+theta <- 3.25
+p <- 2*gamma(theta)/(2*gamma(theta) + gamma(theta+0.5))
+
+x = seq(0.1,15,by=0.1)
+
+
+my_gamma_mix_sim <- function(size,theta){
   
-  X <- c() # allocate empty vector
-
-  p <- 2*gamma(theta)/(2*gamma(theta) + gamma(theta+0.5)) # Calculate p at start so we dont have to recalculate
-  
-    
-  for(i in 1:n){
-    
-    U <- rbinom(1,1,prob=p) # Draw U
-      
-    if(U == 1){
-      
-      X[i] <- rgamma(1,shape = theta,scale = 1)
-      
-    }else{
-      
-      X[i] <- rgamma(1,shape=(theta+0.5),scale=1)
-      
-    }
-    
-  }
-  
-  return(data.frame('GammaMix'=X))
-
-}
-
-
-n <- 10000
-theta_set <- 3
-
-
-gamma_mix_test <- gamma_mix(n=n,theta=theta_set)
-
-gamma_mix_test %>% 
-  ggplot(aes(x=GammaMix)) +
-  geom_density(color = 'darkblue',fill='lightblue')+
-  theme_minimal()
-
-plot(density(gamma_mix_test$GammaMix))
-```
-
-## Part (iii) - Rejection Sampling
-
-No idea if any of this is right. 
-
-### Pseudo-code
-
-
-### Implementation
-
-```{r,rejection}
-
-rejection_gamma_mix <- function(n,theta,alpha){
+  X <- rep(NA,size)
   
   p <- 2*gamma(theta)/(2*gamma(theta) + gamma(theta+0.5))
   
-  X <- c()
-  
-  while(length(X)<n){
+  for(i in 1:size){
     
-    y <- p*rgamma(1,shape=theta) + (1-p)*rgamma(1,shape=theta+1/2)
+    U <- rbinom(1,1,p)
     
-    U <- runif(1)
-    
-    gy <- (p*y^(theta-1) + (1-p)*y^(theta-1/2))*exp(-y)
+    if(U == 1){
       
-    fy <- sqrt(4+y)*y^(theta-1)*exp(-y) 
-    
-    if(U < fy/(alpha*gy)){
+      X[i] <- rgamma(1,shape = theta,rate=1)
       
-      X <- append(X,y)
+    }else{
+      
+      X[i] <- rgamma(1,shape = theta+1/2,rate=1)
       
     }
     
   }
   
-  return(X)  
+  return(X)
+  
+  
+  
 }
+
+
+set.seed(1022)
+
+
+my_simulated_gammamix <- my_gamma_mix_sim(size = 10000,theta=theta)
+
+
+
+
+simulated_gammamix <- bmixture::rmixgamma(n=10000,weight = c(p,1-p),alpha = c(theta,theta+1/2),beta = rep(1,2)) 
+density_gammamix <- bmixture::dmixgamma(x=x,weight = c(p,1-p),alpha = c(theta,theta+1/2),beta = rep(1,2)) 
+
+
+
+hist(simulated_gammamix,prob=T,nclass = 30,col = 'red')
+hist(my_simulated_gammamix,prob=T,nclass = 30,add=T,col = 'blue')
+lines(x,density_gammamix,type = 'l',lwd=3)
 
 ```
 
 
-```{r,rejection_test}
 
-set.seed(1021)
-theta_set <- 3
-alpha_set <- 0.0001
-n <- 1e5
+## Part (iii) - Rejection Sampling
 
-rejection_test <- rejection_gamma_mix(n=n,theta=theta_set,alpha = alpha_set)
+### Pseudo-code
 
-plot_df <- cbind.data.frame('GammaMix'=gamma_mix_test$GammaMix,'Rejection'=rejection_test)
+### Implementation
+
+```{r,densities}
+gy <- function(y,theta){(2*y^(theta-1) + y^(theta-1/2))*exp(-y)}
+
+fy <- function(y,theta){sqrt(4+y)*y^(theta-1)*exp(-y)}
+
+gy_density <- gy(y=x,theta=theta)
+fy_density <- fy(y=seq(0,20,length.out = 10000),theta=theta)
+
+plot(gy_density,type='l',col='blue')
+lines(fy_density,type = 'l',col='red')
+
+curve(sqrt(4+x)*x^(theta-1)*exp(-x),from = 0.001,to=15)
+
+```
+
+```{r,rejection_sampling}
+
+
+rejection_sampler <- function(n,theta,alpha){
+  
+  X <- rep(NA,n)
+  
+  p <- 2*gamma(theta)/(2*gamma(theta) + gamma(theta+0.5))
+  
+  accepted_ct <- 0 
+  
+  rejected_ct <- 0 
+  
+  i <- 1 
+  
+  while(accepted_ct < n){
+    
+    y <- my_gamma_mix_sim(size=1,theta=theta)
+    
+    gy <- gy(y=y,theta=theta)
+    
+    fy_set <- fy(y=y,theta=theta)
+    
+    U <- runif(1,0,1)
+    
+    if(U < fy_set/(alpha*gy)){
+      
+      X[i] <- y
+      
+      i <- i + 1
+      
+      accepted_ct <- accepted_ct + 1
+      
+    }else{
+      
+      rejected_ct <- rejected_ct + 1
+      
+    }
+  
+  }
+  
+  return(list('Sample'=X,'RejectCt'=rejected_ct))
+}
+
+```
+
+```{r,rejection_sample_test}
+
+n <- 10000
+
+rejection <- rejection_sampler(n=n,theta = theta,alpha=3)
+
+plot_df <- cbind.data.frame('Length'=seq(0,20,length.out = 10000),'RejectionSample'=rejection$Sample,'Target'=fy_density)
+
+plot(density(rejection$Sample))
+
 
 plot_df %>% 
-  stack() %>% 
-  ggplot(aes(x = values,color = ind ,fill =ind)) +
-  geom_density() + theme_minimal()
+  ggplot()+
+  geom_density(aes(x=RejectionSample))+
+  ylab('Density') + xlab('y') + 
+  ggtitle('Estimated Density')+
+  theme_minimal() -> plt_estimated_density
+
+plot_df %>% 
+  ggplot()+
+  geom_line(aes(x=Length,y=Target))+
+  theme_minimal() + ylab('f(y)') + xlab('y') +
+  ggtitle('Target Density (Un-normalized)') -> plt_true_density
+
+gridExtra::grid.arrange(plt_estimated_density,plt_true_density, ncol=2)
 
 ```
 
 # Problem 6.3.1 
 
+$\pi(\mu_1),\pi(\mu_2)\sim N(0,\tau^2 = 10^2)$ and $\pi(1/\sigma^2_1) \sim \Gamma(a,b)$
+
+
+```{r}
+
+delta <- 0.7 # true value to be estimated based on the data
+n <- 100
+set.seed(123)
+u <- rbinom(n, prob = delta, size = 1)
+x <- rnorm(n, ifelse(u == 1, 7, 10), 0.5)
+
+mylike <- function(delta, x) {
+    prod(delta * dnorm(x, 7, 0.5) + (1 - delta) * dnorm(x, 10, 0.5))
+}
+
+```

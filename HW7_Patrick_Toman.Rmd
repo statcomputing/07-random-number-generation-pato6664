@@ -1,0 +1,149 @@
+---
+title: "STAT 5361 -  HW 7"
+author: Patrick Toman^[<patrick.toman@uconn.edu>; Ph.D. student at Department of Statistics,
+  University of Connecticut.]
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output: pdf_document
+header-includes:
+  - \usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message = F)
+```
+
+
+# Problem 5.3.1 
+
+## Part (i)
+
+## Part (ii) 
+
+### Pseudo-code
+
+\begin{algorithm}[H]
+\DontPrintSemicolon
+\SetAlgoLined
+\KwIn{$n =$ sample size,$\theta$ = user defined scale parameter}
+\KwResult{$n$ Simulated Observations from density $g(x)$}
+\BlankLine
+\For{i in 1:n}{
+    Allocate empty vector $X \in \mathcal{R}^{n \times 1}$ \;
+    Draw $U \sim Bernoulli\left(p = \frac{2 \Gamma(\theta)}{2 \Gamma(\theta) + \Gamma(\theta+1/2)}\right)$ \;
+    \eIf{$U = 1$}{
+        $X[i] \sim Gamma(\theta,1)$\;
+    }{
+        $X[i] \sim Gamma(\theta+\frac{1}{2},1)$\;
+    }
+}
+\end{algorithm}
+
+### Implementation
+
+```{r}
+rm(list=ls())
+library(tidyverse)
+
+gamma_mix <- function(n,theta){
+  
+  X <- c() # allocate empty vector
+
+  p <- 2*gamma(theta)/(2*gamma(theta) + gamma(theta+0.5)) # Calculate p at start so we dont have to recalculate
+  
+    
+  for(i in 1:n){
+    
+    U <- rbinom(1,1,prob=p) # Draw U
+      
+    if(U == 1){
+      
+      X[i] <- rgamma(1,shape = theta,scale = 1)
+      
+    }else{
+      
+      X[i] <- rgamma(1,shape=(theta+0.5),scale=1)
+      
+    }
+    
+  }
+  
+  return(data.frame('GammaMix'=X))
+
+}
+
+
+n <- 10000
+theta_set <- 3
+
+
+gamma_mix_test <- gamma_mix(n=n,theta=theta_set)
+
+gamma_mix_test %>% 
+  ggplot(aes(x=GammaMix)) +
+  geom_density(color = 'darkblue',fill='lightblue')+
+  theme_minimal()
+
+plot(density(gamma_mix_test$GammaMix))
+```
+
+## Part (iii) - Rejection Sampling
+
+No idea if any of this is right. 
+
+### Pseudo-code
+
+
+### Implementation
+
+```{r,rejection}
+
+rejection_gamma_mix <- function(n,theta,alpha){
+  
+  p <- 2*gamma(theta)/(2*gamma(theta) + gamma(theta+0.5))
+  
+  X <- c()
+  
+  while(length(X)<n){
+    
+    y <- p*rgamma(1,shape=theta) + (1-p)*rgamma(1,shape=theta+1/2)
+    
+    U <- runif(1)
+    
+    gy <- (p*y^(theta-1) + (1-p)*y^(theta-1/2))*exp(-y)
+      
+    fy <- sqrt(4+y)*y^(theta-1)*exp(-y) 
+    
+    if(U < fy/(alpha*gy)){
+      
+      X <- append(X,y)
+      
+    }
+    
+  }
+  
+  return(X)  
+}
+
+```
+
+
+```{r,rejection_test}
+
+set.seed(1021)
+theta_set <- 3
+alpha_set <- 0.0001
+n <- 1e5
+
+rejection_test <- rejection_gamma_mix(n=n,theta=theta_set,alpha = alpha_set)
+
+plot_df <- cbind.data.frame('GammaMix'=gamma_mix_test$GammaMix,'Rejection'=rejection_test)
+
+plot_df %>% 
+  stack() %>% 
+  ggplot(aes(x = values,color = ind ,fill =ind)) +
+  geom_density() + theme_minimal()
+
+```
+
+# Problem 6.3.1 
+

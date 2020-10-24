@@ -12,14 +12,54 @@ header-includes:
 knitr::opts_chunk$set(echo = TRUE,message = F)
 ```
 
+```{r,echo=FALSE,message=FALSE}
+rm(list=ls())
+library(tidyverse)
+```
+
+
 
 # Problem 5.3.1 
 
-No idea if any of this is right. 
-
 ## Part (i)
 
+\begin{align*}
+  1 & = C \left[\int_{0}^{\infty} 2x^{\theta-1}e^{-x}dx + \int_{0}^{\infty} x^{\theta-1/2}e^{-x}dx \right] \\
+    & = C \left[ 2\Gamma(\theta) + \Gamma(\theta + 1/2) \right]
+\end{align*}
+
+Therefore, we can re-arrange terms to find that
+
+\begin{equation*}
+  C = \frac{1}{2\Gamma(\theta) + \Gamma(\theta + 1/2)}
+\end{equation*}
+
+Furthermore, let us denote 
+
+\begin{align*}
+  h_1(x) & = x^{\theta-1}e^{-x} , \ I(x>0) \\
+  h_2(x) & = x^{\theta-1/2}e^{-x} , \ I(x>0)
+\end{align*}
+
+Clearly, these two functions correspond the kernel of two gamma densities, namely $Gamma(\theta,1)$ and $Gamma(\theta+1/2,1)$. Therefore, we derive our full pdf for $g(x)$ as
+
+\begin{align*}
+  g(x) & = \left(\frac{2 \Gamma(\theta) x^{\theta-1}e^{-x}}{\Gamma(\theta)(2\Gamma(\theta) + \Gamma(\theta + 1/2))} + \frac{\Gamma(\theta+1/2)x^{\theta-1/2}e^{-x}}{\Gamma(\theta + 1/2)(2\Gamma(\theta) + \Gamma(\theta + 1/2))}\right)
+\end{align*}
+
+Thus, we conclude that $g(x)$ is a mixture of gammas with the following mixing proportions
+
+\begin{align*}
+  \pi_1 & = \frac{2\Gamma(\theta)}{2\Gamma(\theta) + \Gamma(\theta+1/2)} \\ 
+  \pi_2 & = \frac{\Gamma(\theta + 1/2)}{2\Gamma(\theta) + \Gamma(\theta+1/2)}\\
+  & \text{Subject to} \  \pi_1 + \pi_2 = 1
+\end{align*}
+
+\newpage
+
 ## Part (ii) 
+
+The following pseudo-code details how to draw from our gamma mixture in part(i).
 
 ### Pseudo-code
 
@@ -29,8 +69,8 @@ No idea if any of this is right.
 \KwIn{$n =$ sample size,$\theta$ = user defined scale parameter}
 \KwResult{$n$ Simulated Observations from density $g(x)$}
 \BlankLine
-\For{i in 1:n}{
-    Allocate empty vector $X \in \mathcal{R}^{n \times 1}$ \;
+Allocate empty vector $X \in \mathcal{R}^{n \times 1}$ \;
+\For{$i \ \text{in} \ 1:n$}{
     Draw $U \sim Bernoulli\left(p = \frac{2 \Gamma(\theta)}{2 \Gamma(\theta) + \Gamma(\theta+1/2)}\right)$ \;
     \eIf{$U = 1$}{
         $X[i] \sim Gamma(\theta,1)$\;
@@ -38,21 +78,13 @@ No idea if any of this is right.
         $X[i] \sim Gamma(\theta+\frac{1}{2},1)$\;
     }
 }
+\caption{Gamma Mixture Simulation}
 \end{algorithm}
 
 ### Implementation
 
 
 ```{r,gamma_mix_sim}
-rm(list=ls())
-
-
-theta <- 3.25
-p <- 2*gamma(theta)/(2*gamma(theta) + gamma(theta+0.5))
-
-x = seq(0.1,15,by=0.1)
-
-
 my_gamma_mix_sim <- function(size,theta){
   
   X <- rep(NA,size)
@@ -80,52 +112,72 @@ my_gamma_mix_sim <- function(size,theta){
   
   
 }
+```
 
 
+
+```{r,simulate}
 set.seed(1022)
 
-
+theta <- 3.25
 my_simulated_gammamix <- my_gamma_mix_sim(size = 10000,theta=theta)
-
-
-
-
-simulated_gammamix <- bmixture::rmixgamma(n=10000,weight = c(p,1-p),alpha = c(theta,theta+1/2),beta = rep(1,2)) 
-density_gammamix <- bmixture::dmixgamma(x=x,weight = c(p,1-p),alpha = c(theta,theta+1/2),beta = rep(1,2)) 
-
-
-
-hist(simulated_gammamix,prob=T,nclass = 30,col = 'red')
-hist(my_simulated_gammamix,prob=T,nclass = 30,add=T,col = 'blue')
-lines(x,density_gammamix,type = 'l',lwd=3)
 
 ```
 
+```{r,bmixture,echo=FALSE,include=F}
+#simulated_gammamix <- bmixture::rmixgamma(n=10000,weight = c(p,1-p),
+#                                          alpha = c(theta,theta+1/2),beta = rep(1,2)) 
+
+#density_gammamix <- bmixture::dmixgamma(x=x,weight = c(p,1-p),
+#                                        alpha = c(theta,theta+1/2),beta = rep(1,2)) 
+
+
+
+#hist(simulated_gammamix,prob=T,nclass = 30,col = 'red')
+#hist(my_simulated_gammamix,prob=T,nclass = 30,add=T,col = 'blue')
+#lines(x,density_gammamix,type = 'l',lwd=3)
+```
 
 
 ## Part (iii) - Rejection Sampling
 
+The folling algorithm presents a rejection sampling scheme to draw samples from target density 
+
+$$f(x) \propto \ \sqrt{4 + x}x^{\theta-1}e^{-x}, I(x>0)$$
+
+using the following instrumental density
+
+$$g(x) =   \left(\frac{2 \Gamma(\theta) x^{\theta-1}e^{-x}}{\Gamma(\theta)(2\Gamma(\theta) + \Gamma(\theta + 1/2))} + \frac{\Gamma(\theta+1/2)x^{\theta-1/2}e^{-x}}{\Gamma(\theta + 1/2)(2\Gamma(\theta) + \Gamma(\theta + 1/2))}\right)$$
+
 ### Pseudo-code
+
+\begin{algorithm}[H]
+\DontPrintSemicolon
+\SetAlgoLined
+\KwIn{$n =$ sample size,$\theta$ = user defined scale parameter,$\alpha \ge 0$ = user defined constant}
+\KwResult{$n$ Simulated Observations from density $g(x)$}
+\BlankLine
+Allocate empty vector $X \in \mathcal{R}^{n \times 1}$ \;
+\For{$i \ \text{in} \ 1:n$}{
+    Draw $U \sim Bernoulli\left(p = \frac{2 \Gamma(\theta)}{2 \Gamma(\theta) + \Gamma(\theta+1/2)}\right)$ \;
+    \eIf{$U = 1$}{
+        $X[i] \sim Gamma(\theta,1)$\;
+    }{
+        $X[i] \sim Gamma(\theta+\frac{1}{2},1)$\;
+    }
+}
+\caption{Rejection Sampler}
+\end{algorithm}
+
 
 ### Implementation
 
-```{r,densities}
-gy <- function(y,theta){(2*y^(theta-1) + y^(theta-1/2))*exp(-y)}
-
-fy <- function(y,theta){sqrt(4+y)*y^(theta-1)*exp(-y)}
-
-gy_density <- gy(y=x,theta=theta)
-fy_density <- fy(y=seq(0,20,length.out = 10000),theta=theta)
-
-plot(gy_density,type='l',col='blue')
-lines(fy_density,type = 'l',col='red')
-
-curve(sqrt(4+x)*x^(theta-1)*exp(-x),from = 0.001,to=15)
-
-```
 
 ```{r,rejection_sampling}
 
+gy <- function(y,theta){(2*y^(theta-1) + y^(theta-1/2))*exp(-y)}
+
+fy <- function(y,theta){sqrt(4+y)*y^(theta-1)*exp(-y)}
 
 rejection_sampler <- function(n,theta,alpha){
   
@@ -170,16 +222,26 @@ rejection_sampler <- function(n,theta,alpha){
 
 ```
 
+```{r,densities,include=F,echo=F}
+#gy_density <- gy(y=x,theta=theta)
+#fy_density <- fy(y=seq(0,20,length.out = 10000),theta=theta)
+
+#plot(gy_density,type='l',col='blue')
+#lines(fy_density,type = 'l',col='red')
+
+#curve(sqrt(4+x)*x^(theta-1)*exp(-x),from = 0.001,to=15)
+
+```
+
 ```{r,rejection_sample_test}
 
 n <- 10000
 
 rejection <- rejection_sampler(n=n,theta = theta,alpha=3)
+fy_density <- fy(y=seq(0,20,length.out = 10000),theta=theta)
+
 
 plot_df <- cbind.data.frame('Length'=seq(0,20,length.out = 10000),'RejectionSample'=rejection$Sample,'Target'=fy_density)
-
-plot(density(rejection$Sample))
-
 
 plot_df %>% 
   ggplot()+
@@ -196,6 +258,7 @@ plot_df %>%
 
 gridExtra::grid.arrange(plt_estimated_density,plt_true_density, ncol=2)
 
+
 ```
 
 # Problem 6.3.1 
@@ -210,9 +273,5 @@ n <- 100
 set.seed(123)
 u <- rbinom(n, prob = delta, size = 1)
 x <- rnorm(n, ifelse(u == 1, 7, 10), 0.5)
-
-mylike <- function(delta, x) {
-    prod(delta * dnorm(x, 7, 0.5) + (1 - delta) * dnorm(x, 10, 0.5))
-}
 
 ```

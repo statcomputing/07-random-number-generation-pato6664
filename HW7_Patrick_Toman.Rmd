@@ -6,6 +6,9 @@ date: "`r format(Sys.time(), '%d %B %Y')`"
 output: pdf_document
 header-includes:
   - \usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+bibliography: references.bib
+biblio-style: apa
+
 ---
 
 ```{r setup, include=FALSE}
@@ -61,8 +64,6 @@ Thus, we conclude that $g(x)$ is a mixture of gammas with the following mixing p
 
 The following pseudo-code details how to draw from our gamma mixture in part(i).
 
-### Pseudo-code
-
 \begin{algorithm}[H]
 \DontPrintSemicolon
 \SetAlgoLined
@@ -81,10 +82,10 @@ Allocate empty vector $X \in \mathcal{R}^{n \times 1}$ \;
 \caption{Gamma Mixture Simulation}
 \end{algorithm}
 
-### Implementation
-
+### Implementation 
 
 ```{r,gamma_mix_sim}
+
 my_gamma_mix_sim <- function(size,theta){
   
   X <- rep(NA,size)
@@ -115,10 +116,12 @@ my_gamma_mix_sim <- function(size,theta){
 ```
 
 
+### Results
+
+The snippet of code below simulates a $n = 10,000$ draws from the gamma mixture densith $g(x|\theta)$ where $\theta = 3.25$
 
 ```{r,simulate}
 set.seed(1022)
-
 theta <- 3.25
 my_simulated_gammamix <- my_gamma_mix_sim(size = 10000,theta=theta)
 
@@ -138,7 +141,6 @@ my_simulated_gammamix <- my_gamma_mix_sim(size = 10000,theta=theta)
 #lines(x,density_gammamix,type = 'l',lwd=3)
 ```
 
-
 ## Part (iii) - Rejection Sampling
 
 The folling algorithm presents a rejection sampling scheme to draw samples from target density 
@@ -148,29 +150,29 @@ $$f(x) \propto \ \sqrt{4 + x}x^{\theta-1}e^{-x}, I(x>0)$$
 using the following instrumental density
 
 $$g(x) =   \left(\frac{2 \Gamma(\theta) x^{\theta-1}e^{-x}}{\Gamma(\theta)(2\Gamma(\theta) + \Gamma(\theta + 1/2))} + \frac{\Gamma(\theta+1/2)x^{\theta-1/2}e^{-x}}{\Gamma(\theta + 1/2)(2\Gamma(\theta) + \Gamma(\theta + 1/2))}\right)$$
-
-### Pseudo-code
-
 \begin{algorithm}[H]
 \DontPrintSemicolon
 \SetAlgoLined
 \KwIn{$n =$ sample size,$\theta$ = user defined scale parameter,$\alpha \ge 0$ = user defined constant}
-\KwResult{$n$ Simulated Observations from density $g(x)$}
+\KwResult{simulated sample $n$ of size bservations from target density $f(x)$}
 \BlankLine
 Allocate empty vector $X \in \mathcal{R}^{n \times 1}$ \;
-\For{$i \ \text{in} \ 1:n$}{
-    Draw $U \sim Bernoulli\left(p = \frac{2 \Gamma(\theta)}{2 \Gamma(\theta) + \Gamma(\theta+1/2)}\right)$ \;
-    \eIf{$U = 1$}{
-        $X[i] \sim Gamma(\theta,1)$\;
+\While{$\dim(X)$ < $n$)}{
+    Draw $Y^{'} \sim g(x)$
+    Draw $U \sim Uniform(0,1)$ \;
+    \eIf{$U < \frac{f(Y^{'})}{\alpha(Y^{'})}$}{
+        $X[i] = Y^{'}$\;
     }{
-        $X[i] \sim Gamma(\theta+\frac{1}{2},1)$\;
+        Reject $Y^{'}$ and repeat lines (3) and (4)\;
     }
 }
 \caption{Rejection Sampler}
 \end{algorithm}
 
 
-### Implementation
+### Implementation and Results 
+
+We implement the rejection sampler 
 
 
 ```{r,rejection_sampling}
@@ -233,14 +235,19 @@ rejection_sampler <- function(n,theta,alpha){
 
 ```
 
+### Results 
+
+We run our rejection sampler with $\alpha = 3, \theta = 3.25$ and draw $n = 10,000$ samples from the target density $f(x)$. The plots below are a side-by-side comparison of the estimated kernel density and the un-normalized target density. Clearly, the estimated density and true target density are quite similar. 
+
+
 ```{r,rejection_sample_test}
 
 n <- 10000
-
 rejection <- rejection_sampler(n=n,theta = theta,alpha=3)
 fy_density <- fy(y=seq(0,20,length.out = 10000),theta=theta)
+```
 
-
+```{r,echo=FALSE,include=FALSE}
 plot_df <- cbind.data.frame('Length'=seq(0,20,length.out = 10000),'RejectionSample'=rejection$Sample,'Target'=fy_density)
 
 plot_df %>% 
@@ -255,19 +262,66 @@ plot_df %>%
   geom_line(aes(x=Length,y=Target))+
   theme_minimal() + ylab('f(y)') + xlab('y') +
   ggtitle('Target Density (Un-normalized)') -> plt_true_density
+```
 
+```{r,echo=FALSE}
 gridExtra::grid.arrange(plt_estimated_density,plt_true_density, ncol=2)
-
 
 ```
 
 # Problem 6.3.1 
 
-$\pi(\mu_1),\pi(\mu_2)\sim N(0,\tau^2 = 10^2)$ and $\pi(1/\sigma^2_1) \sim \Gamma(a,b)$
+
+## Setup 
+
+Let us denote $\theta = (\lambda,\mu_1,\mu_2,\sigma^2_{1},\sigma^2_{2})$. Suppose then that we have $X_1,\ldots,X_n \ \overset{iid}{\sim} f(x|\theta)$ where $f(x|\theta)$ is the gaussian mixture model 
+
+$$f(x|\theta) = \lambda\phi(.|\mu_1,\sigma^2_{1}) + (1-\lambda)\phi(.|\mu_2,\sigma^2_{2})$$
+Furthermore, let us denote the priors for the components of $\theta$ are as follows
+
+* $\pi(\lambda) \sim U(0,1)$
+  + If we let $p_1$ and $(1-\lambda)= p_2$ then we have $\pi(\mathbf{p}) \sim Dirichlet(\gamma_1,\gamma_2)$
+* $\pi(\mu_1),\pi(\mu_2) \sim N(0,10^2)$
+* $\pi(\sigma^2_1),\pi(\sigma^2_2) \sim \ InvGamma(a=0.5,b=10)$ - (Inverse Gamma with parameters $a=0.5,b=10$)
+
+## Conditionals 
+
+Following the notation of \textcolor{red}{cite here} we first define the following 
+
+$$n_j = S^{(x)}_{j} = \sum_{i=1}^{n}I(z^{(t)}_j=j)x_l$$
+
+$$S^{v}_{j} = \sum_{i=1}^{n}I(z^{(t)}_{i} = j)(x_i - \mu_j)^2 \ , j = 1,2$$
+
+Then it can be shown that we have the following posterior densities 
+
+* $(\mu_j|\sigma^2_{j},\mathbf{x},\mathbf{z}) \sim N\left(\frac{\lambda_j \tau_j +S^x_j}{\tau_j + n_j},\frac{\sigma^{2}_j }{\tau_j + n_j}\right)$
+  + $\lambda_j = 0 , j=1,2$ - since our prior mean $\mu_j = 0$ for $j=1,2$
+  + $\tau_j =10^{-2}, j=1,2$ which is the precision for our priors for $\mu_1,\mu_2$
+* $(\sigma^2_j|\mu_j,\mathbf{x},\mathbf{z}) \sim \ InvGamma\left(\alpha_j + \frac{n_j+1}{2},\beta_j + \frac{\tau_j}{2}(\mu_j-\lambda_j)^2 + \frac{S^v_{j}}{2}\right)$
+  + $\alpha_j = a = 0.5$ and $\beta_j = b = 10$ - the prior shape and scale parameters
+
+## Gibbs Sampler
+
+In the same spirit as \textcolor{red}{cite here} we have
+
+\begin{algorithm}[H]
+\DontPrintSemicolon
+\SetAlgoLined
+Initialize paramters $\theta^{0},\mathbf{p}^0$ \;
+\For{$t$ = 1,....}{
+     Draw latent assignment variable $z^{(t)}_{i}$ for $j=1,2$ where $P(Z^{(t)}_{i}=j) \propto \frac{p^{(t-1)}_j}{\sigma^{2(t-1)}_j}exp\left\{-\frac{\left(x_i - \mu^{(t-1)}_j\right)^2}{2\sigma^{2(t-1)}_j}\right\}$ \;
+    Calculate $n^{(t)}_j$ for $j=1,2$\;
+    Draw $\mathbf{p}^{(t)} \sim Dirichlet(\gamma_1+n_1,\gamma_2 + n_2)$ - $\gamma_1,\gamma_2$ are known hyperparameters \;
+    Draw $\mu^{(t)}_j \sim N\left(\frac{\lambda_j\tau_j + S^{x(t)}_j}{\tau_j + n_j},\frac{\sigma_j^{2(t-1)}}{\tau_j + n_j}\right)$
+Calculate $S^{v(t)}_{j} = \sum_{i=1}^{n}I(z^{(t)}_{i}=j)(x_i - \mu_j)^2$ for $j=1,2$ \;
+Draw $\sigma_j^{2(t)} \sim \ InvGamma\left(a + \frac{n_j + 1}{2}, b + \frac{\tau_j}{2}(S^{v(t)}_{j})\right) $ for $j=1,2$\;
+}
+\caption{Gibbs Sampler}
+\end{algorithm}
 
 
-```{r}
 
+```{r,simulate_normal_mix,echo=FALSE}
 delta <- 0.7 # true value to be estimated based on the data
 n <- 100
 set.seed(123)
@@ -275,3 +329,195 @@ u <- rbinom(n, prob = delta, size = 1)
 x <- rnorm(n, ifelse(u == 1, 7, 10), 0.5)
 
 ```
+
+```{r,implementation}
+
+normalize <- function(x){
+  
+  return(x/sum(x))
+
+}
+  
+sample_z <- function(x,lambda,mu,sigma_sq){
+  
+    dmat <- outer(mu,x,"-") 
+    
+    dmat[,1] <- sqrt(sigma_sq[1])
+    
+    dmat[,2] <- sqrt(sigma_sq[2])
+    
+    z_given_x <- as.vector(lambda) * dnorm(dmat,0,1) 
+    
+    z_given_x <- apply(z_given_x,2,normalize) 
+    
+    z <- rep(0, length(x))
+    
+    for(i in 1:length(z)){
+     
+       z[i] <- sample(1:length(lambda), size=1,prob=z_given_x[,i],replace=TRUE)
+    
+    }
+    
+  return(z)
+}
+ 
+    
+sample_lambda <- function(z,k){
+  
+    counts <- colSums(outer(z,1:k,FUN="=="))
+    
+    lambda <- gtools::rdirichlet(1,counts+1)
+    
+    return(lambda)
+}
+
+sample_mu <- function(x, z, k, prior,sigma_sq){
+    
+  df <- data.frame(x=x,z=z)
+  
+  mu <- rep(0,k)
+  
+  for(i in 1:k){
+      
+      sample_size <- sum(z==i)
+      
+      sample_mean <- ifelse(sample_size==0,0,mean(x[z==i]))
+      
+      post_prec <- sample_size+prior$prec
+      
+      post_mean <- (prior$mean * prior$prec + sample_mean * sample_size)/post_prec
+      
+      mu[i] <- rnorm(1,post_mean,sqrt(sigma_sq[i]/post_prec))
+      
+    }
+  
+    return(mu)
+  
+}
+
+sample_sigmasq <- function(mu,x,z,k,prior){
+  
+  smat <- outer(mu,x,"-") 
+  
+  smat <- smat^2 
+  
+  df <- data.frame(smat=smat,z=z)
+  
+  sigma_sq <- rep(NA,k)
+  
+  for(i in 1:k){
+    
+    sample_size <- sum(z==i)
+    
+    sj <- ifelse(sample_size==0,0,sum((smat[z==i]-mu[i])^2))
+    
+    shape_param <- prior$shape + (sample_size+1)/2
+    
+    scale_param <- prior$scale + (0.5)*prior$prec*(mu[i]-prior$mean)^2 + 0.5*sj
+    
+    sigma_sq[i] <- 1/(rgamma(1,shape=shape_param,scale=scale_param))
+    
+  }
+  
+  return(sigma_sq)
+  
+}
+
+  
+gibbs <- function(x,k,niter =1000,prior_list = list(mean=0,prec=0.1,shape=0.5,scale=10)){
+  
+    lambda <- rep(1/k,k) # initialize
+  
+    mu <- rnorm(k,0,10)
+    
+    sigma_sq <- 1/rgamma(k,shape=0.5,scale=10)
+  
+    z <- sample_z(x,lambda,mu,sigma_sq)
+    
+    result <- list(mu=matrix(nrow=niter, ncol=k),
+                   lambda = matrix(nrow=niter,ncol=k),
+                   z = matrix(nrow=niter, ncol=length(x)),
+                   sigma_sq = matrix(nrow=niter, ncol=length(x)))
+  
+    result$mu[1,] <- mu
+    
+    result$lambda[1,] <- lambda
+    
+    result$z[1,] <- z 
+    
+    result$sigma_sq[1,] <- sigma_sq
+    
+    for(i in 2:niter){
+      
+      lambda <- sample_lambda(z,k)
+      
+      mu <- sample_mu(x,z,k,prior=prior_list,sigma_sq = sigma_sq)
+      
+      sigma_sq <- sample_sigmasq(mu,x,z,k,prior=prior_list)
+      
+      z <- sample_z(x,lambda,mu,sigma_sq = sigma_sq)
+      
+      result$mu[i,] <- mu
+      
+      result$lambda[i,] <- lambda
+      
+      result$sigma_sq[i,] <- sigma_sq 
+      
+      result$z[i,] <- z
+    
+    }
+    
+    return(result)
+    
+}
+```
+
+## Results 
+
+We run the Gibbs sampler for $30,000$ iterations and and remove the first $6,000$ sampeles as a burnin set.  
+
+```{r,gibbs_sampler_test}
+
+set.seed(1024)
+
+niter_set <- 30000
+
+k_set <- 2
+
+gibbs_sampler_test <- gibbs(x=x,k=k_set,niter=niter_set)
+
+burn <- ceiling(niter_set/5)
+```
+
+### Posterior Densities for Assignments
+
+
+```{r,echo=FALSE}
+par(mfrow=c(1,2))
+hist(gibbs_sampler_test$lambda[-c(1:burn),1],col = 'blue',
+     main = bquote("Posterior Density - "~lambda[1]),xlab = bquote(lambda[1]))
+hist(gibbs_sampler_test$lambda[-c(1:burn),2],col = 'red',
+     main = bquote("Posterior Density - "~lambda[2]),xlab = bquote(lambda[2]))
+```
+
+### Posterior Densities for Means
+
+```{r,echo=FALSE}
+par(mfrow=c(1,2))
+hist(gibbs_sampler_test$mu[-c(1:burn),1],col = 'blue',main = bquote("Posterior Density - "~mu[1]),xlab = bquote(mu[1]))
+hist(gibbs_sampler_test$mu[-c(1:burn),2],col = 'red',main = bquote("Posterior Density - "~mu[2]),xlab = bquote(mu[2]))
+
+```
+
+### Posterior Densities for Variances
+
+```{r,echo=FALSE}
+par(mfrow=c(1,2))
+hist(gibbs_sampler_test$sigma_sq[-c(1:burn),1],col = 'blue',
+     main = bquote("Posterior Density - "~sigma[1]^2),xlab = bquote(~sigma[1]^2))
+hist(gibbs_sampler_test$sigma_sq[-c(1:burn),2],col = 'red',
+     main = bquote("Posterior Density - "~sigma[2]^2),xlab = bquote(~sigma[2]^2))
+
+```
+
+

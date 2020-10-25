@@ -150,6 +150,7 @@ $$f(x) \propto \ \sqrt{4 + x}x^{\theta-1}e^{-x}, I(x>0)$$
 using the following instrumental density
 
 $$g(x) =   \left(\frac{2 \Gamma(\theta) x^{\theta-1}e^{-x}}{\Gamma(\theta)(2\Gamma(\theta) + \Gamma(\theta + 1/2))} + \frac{\Gamma(\theta+1/2)x^{\theta-1/2}e^{-x}}{\Gamma(\theta + 1/2)(2\Gamma(\theta) + \Gamma(\theta + 1/2))}\right)$$
+
 \begin{algorithm}[H]
 \DontPrintSemicolon
 \SetAlgoLined
@@ -286,7 +287,7 @@ Furthermore, let us denote the priors for the components of $\theta$ are as foll
 
 ## Conditionals 
 
-Following the notation of \textcolor{red}{cite here} we first define the following 
+Following the notation of @Marin we first define the following 
 
 $$n_j = S^{(x)}_{j} = \sum_{i=1}^{n}I(z^{(t)}_j=j)x_l$$
 
@@ -302,7 +303,7 @@ Then it can be shown that we have the following posterior densities
 
 ## Gibbs Sampler
 
-In the same spirit as \textcolor{red}{cite here} we have
+In the same spirit as @Marin we have
 
 \begin{algorithm}[H]
 \DontPrintSemicolon
@@ -319,7 +320,9 @@ Draw $\sigma_j^{2(t)} \sim \ InvGamma\left(a + \frac{n_j + 1}{2}, b + \frac{\tau
 \caption{Gibbs Sampler}
 \end{algorithm}
 
+## Implementation 
 
+An implementation of the gibbs sampler is given below.
 
 ```{r,simulate_normal_mix,echo=FALSE}
 delta <- 0.7 # true value to be estimated based on the data
@@ -330,14 +333,17 @@ x <- rnorm(n, ifelse(u == 1, 7, 10), 0.5)
 
 ```
 
-```{r,implementation}
+```{r,normalize,echo=FALSE}
 
 normalize <- function(x){
   
   return(x/sum(x))
 
 }
-  
+
+```
+
+```{r,implementation}
 sample_z <- function(x,lambda,mu,sigma_sq){
   
     dmat <- outer(mu,x,"-") 
@@ -364,9 +370,9 @@ sample_z <- function(x,lambda,mu,sigma_sq){
     
 sample_lambda <- function(z,k){
   
-    counts <- colSums(outer(z,1:k,FUN="=="))
+    n_j <- colSums(outer(z,1:k,"=="))
     
-    lambda <- gtools::rdirichlet(1,counts+1)
+    lambda <- gtools::rdirichlet(1,n_j+1)
     
     return(lambda)
 }
@@ -422,52 +428,50 @@ sample_sigmasq <- function(mu,x,z,k,prior){
   return(sigma_sq)
   
 }
-
   
-gibbs <- function(x,k,niter =1000,prior_list = list(mean=0,prec=0.1,shape=0.5,scale=10)){
+gibbs_sampler <- function(x,k,niter,prior_list = list(mean=0,prec=0.1,shape=0.5,scale=10)){
   
-    lambda <- rep(1/k,k) # initialize
+  lambda <- rep(1/k,k) 
   
-    mu <- rnorm(k,0,10)
+  mu <- rnorm(k,0,10)
     
-    sigma_sq <- 1/rgamma(k,shape=0.5,scale=10)
+  sigma_sq <- 1/rgamma(k,shape=0.5,scale=10)
   
-    z <- sample_z(x,lambda,mu,sigma_sq)
-    
-    result <- list(mu=matrix(nrow=niter, ncol=k),
-                   lambda = matrix(nrow=niter,ncol=k),
-                   z = matrix(nrow=niter, ncol=length(x)),
-                   sigma_sq = matrix(nrow=niter, ncol=length(x)))
+  z <- sample_z(x,lambda,mu,sigma_sq)
   
-    result$mu[1,] <- mu
+  result <- list(mu=matrix(nrow=niter, ncol=k),
+                 lambda = matrix(nrow=niter,ncol=k),
+                 z = matrix(nrow=niter, ncol=length(x)),
+                 sigma_sq = matrix(nrow=niter, ncol=length(x)))
+  
+  result$mu[1,] <- mu
+  
+  result$lambda[1,] <- lambda
+  
+  result$z[1,] <- z 
+  
+  result$sigma_sq[1,] <- sigma_sq
+  
+  for(i in 2:niter){
     
-    result$lambda[1,] <- lambda
+    lambda <- sample_lambda(z,k)
     
-    result$z[1,] <- z 
+    mu <- sample_mu(x,z,k,prior=prior_list,sigma_sq = sigma_sq)
     
-    result$sigma_sq[1,] <- sigma_sq
+    sigma_sq <- sample_sigmasq(mu,x,z,k,prior=prior_list)
     
-    for(i in 2:niter){
-      
-      lambda <- sample_lambda(z,k)
-      
-      mu <- sample_mu(x,z,k,prior=prior_list,sigma_sq = sigma_sq)
-      
-      sigma_sq <- sample_sigmasq(mu,x,z,k,prior=prior_list)
-      
-      z <- sample_z(x,lambda,mu,sigma_sq = sigma_sq)
-      
-      result$mu[i,] <- mu
-      
-      result$lambda[i,] <- lambda
-      
-      result$sigma_sq[i,] <- sigma_sq 
-      
-      result$z[i,] <- z
+    z <- sample_z(x,lambda,mu,sigma_sq = sigma_sq)
     
-    }
+    result$mu[i,] <- mu
     
-    return(result)
+    result$lambda[i,] <- lambda
+    
+    result$sigma_sq[i,] <- sigma_sq 
+    
+    result$z[i,] <- z
+  }
+  
+  return(result)
     
 }
 ```
@@ -484,13 +488,16 @@ niter_set <- 30000
 
 k_set <- 2
 
-gibbs_sampler_test <- gibbs(x=x,k=k_set,niter=niter_set)
+gibbs_sampler_test <- gibbs_sampler(x=x,k=k_set,niter=niter_set)
 
 burn <- ceiling(niter_set/5)
 ```
 
-### Posterior Densities for Assignments
+## Posteriors
 
+Shown below are histograms of the posterior densities of our unknown parameters.
+
+### Posterior Densities for Assignmentss
 
 ```{r,echo=FALSE}
 par(mfrow=c(1,2))
@@ -520,4 +527,5 @@ hist(gibbs_sampler_test$sigma_sq[-c(1:burn),2],col = 'red',
 
 ```
 
+# References
 
